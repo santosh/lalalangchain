@@ -11,17 +11,27 @@ A minimal LangChain agent that answers weather queries using a **local LLM via O
 
 ## How it works
 
-```
-User prompt
-    └─► Agent (llama3.1:8b via Ollama)
-            └─► get_weather(city)
-                    ├─► Open-Meteo geocoding API  →  lat/lon
-                    └─► Open-Meteo forecast API   →  weather data
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as Agent (llama3.1:8b)
+    participant Tool as get_weather
+    participant API as Open-Meteo
+
+    User->>Agent: "Weather in Mumbai?"
+    Agent->>Tool: call get_weather("Mumbai")
+    Tool->>API: geocoding: city → lat/lon
+    API-->>Tool: coordinates
+    Tool->>API: forecast: lat/lon → weather
+    API-->>Tool: temp, humidity, wind…
+    Tool-->>Agent: short weather summary
+    Agent->>Agent: compose a witty reply
+    Agent-->>User: final answer 🌤️
 ```
 
-1. The `get_weather` tool resolves a city name to coordinates via the [Open-Meteo geocoding API](https://open-meteo.com/en/docs/geocoding-api).
-2. It then fetches current temperature, humidity, wind speed, and weather code from the [Open-Meteo forecast API](https://open-meteo.com/en/docs).
-3. The agent is prompted to be humorous while remaining useful.
+1. The agent (LLM) receives the user prompt and decides to call the `get_weather` tool.
+2. The tool resolves the city to coordinates via the [Open-Meteo geocoding API](https://open-meteo.com/en/docs/geocoding-api), then fetches current temperature, humidity, wind speed, and weather code from the [Open-Meteo forecast API](https://open-meteo.com/en/docs).
+3. The tool returns a short summary **back to the agent**, which then composes the final humorous reply for the user.
 
 ## Requirements
 
