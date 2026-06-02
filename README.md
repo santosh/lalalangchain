@@ -9,13 +9,14 @@ Each stage lives on its own branch so you can check out any point in the journey
 | Stage | Branch | What's covered |
 |---|---|---|
 | 1 | [stage-1](../../tree/stage-1) | Basic weather agent — custom tool, Ollama LLM, Open-Meteo API |
+| 2 | [stage-2](../../tree/stage-2) | Context-aware agent — runtime context, structured output, conversation memory |
 
 ## Quickstart (latest stage)
 
-**Requirements:** Python 3.12+, [Ollama](https://ollama.com) with `llama3.1:8b`, [uv](https://docs.astral.sh/uv/)
+**Requirements:** Python 3.12+, [Ollama](https://ollama.com) with `qwen3:14b`, [uv](https://docs.astral.sh/uv/)
 
 ```bash
-ollama pull llama3.1:8b
+ollama pull qwen3:14b
 uv sync
 uv run main.py
 ```
