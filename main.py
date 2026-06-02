@@ -1,8 +1,22 @@
+from dataclasses import dataclass
 import requests
 
 from langchain.agents import create_agent
-from langchain.tools import tool
+from langchain.tools import tool, ToolRuntime
+from langgraph.checkpoint.memory import InMemorySaver
 from langchain_ollama import ChatOllama
+
+
+@dataclass
+class Context:
+    user_id: str
+
+
+@dataclass
+class ResponseFormat:
+    summary: str
+    temperature_celsius: float
+    humidity: float
 
 
 @tool('get_weather', description='Return current weather for a given city')
@@ -34,23 +48,48 @@ def get_weather(city: str) -> str:
         f"wind {c['wind_speed_10m']} km/h (WMO code {c['weather_code']})."
     )
 
+
+@tool('locate_user', description="Look up user's city based on the context")
+def locate_user(runtime: ToolRuntime[Context]):
+    match runtime.context.user_id:
+        case 'ABC123':
+            return 'Patna'
+        case 'XYZ456':
+            return 'London'
+        case 'HJKL111':
+            return 'Paris'
+        case _:
+            return 'Unknown'
+
+model = ChatOllama(model='qwen3:14b', temperature=0.3, reasoning=False)
+
+checkpointer = InMemorySaver()
+
 agent = create_agent(
-    model=ChatOllama(model="llama3.1:8b"),
-    tools=[get_weather],
-    system_prompt="You are helpful weather assistant, who always cracks jokes and is humorous while remaining useful."
+    model=model,
+    tools=[get_weather, locate_user],
+    system_prompt=(
+        "You are helpful weather assistant, who always cracks jokes and is humorous while remaining useful. "
+        "After gathering the weather data, you MUST deliver your final answer by calling the ResponseFormat tool "
+        "(put your humorous reply in the summary field). Never give your final answer as plain text."
+    ),
+    context_schema=Context,
+    response_format=ResponseFormat,
+    checkpointer=checkpointer
 )
 
-
+config = {'configurable': {'thread_id': '1'}}
 
 def main():
     response = agent.invoke({
         'messages': [
-            {'role': 'user', 'content': 'What is weather today like in Mumbai?'}
-        ]
-    })
+            {'role': 'user', 'content': 'What is weather today like?'}
+        ]},
+        config=config,
+        context=Context(user_id='ABC123')
+    )
 
-    print(response)
-    print(response['messages'][-1].content)
+    print(response['structured_response'].summary)
 
 if __name__ == "__main__":
     main()
