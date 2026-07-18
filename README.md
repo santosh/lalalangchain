@@ -1,32 +1,27 @@
 # lalalangchain
 
-A step-by-step tutorial building a LangChain agent from scratch — starting with a simple weather lookup and growing toward a fully-featured conversational AI application.
+My notes and code from working through a [LangChain tutorial](https://www.youtube.com/watch?v=J7j5tCB_y4w), built around a small weather agent.
 
-Each stage lives on its own branch so you can check out any point in the journey independently.
+Each lesson explores a **different** LangChain concept rather than building on top of the previous one. So every lesson lives on its own branch and stands alone — the numbers just suggest an order to follow them in, not a dependency chain. `main` holds this overview plus a runnable copy of the latest lesson's code.
 
-## Tutorial Stages
+## Lessons
 
-| Stage | Branch | What's covered |
+| # | Branch | Concept |
 |---|---|---|
-| 1 | [stage-1](../../tree/stage-1) | Basic weather agent — custom tool, Ollama LLM, Open-Meteo API |
-| 2 | [stage-2](../../tree/stage-2) | Context-aware agent — runtime context, structured output, conversation memory |
+| 01 | [01-basic-weather-agent](../../tree/01-basic-weather-agent) | Custom `@tool`, `create_agent`, a local Ollama LLM, and calling the Open-Meteo API |
+| 02 | [02-context-and-memory](../../tree/02-context-and-memory) | Runtime context (`context_schema`), structured output (`response_format`), and conversation memory (checkpointer) |
 
-## Quickstart (latest stage)
+Each branch has its own README explaining what that lesson covers.
 
-**Requirements:** Python 3.12+, [Ollama](https://ollama.com) with `qwen3:14b`, [uv](https://docs.astral.sh/uv/)
+## Running a lesson
+
+**Requirements:** Python 3.12+, [Ollama](https://ollama.com), [uv](https://docs.astral.sh/uv/)
 
 ```bash
-ollama pull qwen3:14b
-uv sync
+git checkout 01-basic-weather-agent   # or any lesson branch
+uv sync                               # install that lesson's deps
+ollama pull qwen3:14b                 # check the branch README for the model it uses
 uv run main.py
 ```
 
-## Following the tutorial
-
-To explore a specific stage:
-
-```bash
-git checkout stage-1   # or stage-2, stage-3, …
-```
-
-Each branch has its own README explaining what was added and why.
+The model each lesson uses is noted in its README (lesson 01 uses `llama3.1:8b`, lesson 02 uses `qwen3:14b`).
