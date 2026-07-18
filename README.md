@@ -1,8 +1,8 @@
-# lalalangchain — Stage 1: Basic Weather Agent
+# lalalangchain — Basic Weather Agent
 
 A minimal LangChain agent that answers weather queries using a **local LLM via Ollama** and **free public APIs** — no API keys required.
 
-## What this stage covers
+## What this lesson covers
 
 - Defining a custom LangChain `@tool`
 - Creating an agent with `create_agent` (from `deepagents`)
@@ -75,4 +75,4 @@ The script asks the agent _"What is the weather today like in Mumbai?"_ and prin
 
 ---
 
-> Part of a multi-stage tutorial — see the [`main` branch](../../tree/main) for all stages.
+> One of several standalone LangChain lessons — see the [`main` branch](../../tree/main) for the full list.
