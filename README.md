@@ -1,8 +1,8 @@
-# lalalangchain — Stage 2: Context-Aware Agent
+# lalalangchain — Context-Aware Agent
 
-Building on [Stage 1](../../tree/stage-1), the agent now knows **who** it's talking to, returns **structured data** instead of free-form text, and **remembers** the conversation across turns.
+A weather agent that knows **who** it's talking to, returns **structured data** instead of free-form text, and **remembers** the conversation across turns. It reuses the [basic weather agent](../../tree/01-basic-weather-agent)'s `get_weather` tool, but the focus here is context, structured output, and memory.
 
-## What this stage covers
+## What this lesson covers
 
 - Passing per-invocation data with a `context_schema` and `ToolRuntime[Context]`
 - A `locate_user` tool that resolves a user's city from their `user_id`
@@ -33,7 +33,7 @@ sequenceDiagram
 
 1. The user prompt arrives **without a city** — but with a `Context(user_id=...)`.
 2. The agent calls `locate_user`, which reads `runtime.context.user_id` and maps it to a city.
-3. It then calls `get_weather` for that city (same Open-Meteo flow as Stage 1).
+3. It then calls `get_weather` for that city (same Open-Meteo flow as the [basic weather agent](../../tree/01-basic-weather-agent)).
 4. Instead of replying in plain text, the agent calls the **`ResponseFormat` tool**, so the result comes back as a typed `ResponseFormat(summary, temperature_celsius, humidity)` in `response['structured_response']`.
 5. The `InMemorySaver` checkpointer persists the message history under the `thread_id`, so follow-up turns retain context.
 
@@ -84,4 +84,4 @@ The script asks _"What is the weather today like?"_ as user `ABC123` (Patna) and
 
 ---
 
-> Part of a multi-stage tutorial — see the [`main` branch](../../tree/main) for all stages.
+> One of several standalone LangChain lessons — see the [`main` branch](../../tree/main) for the full list.
