@@ -1,31 +1,80 @@
-# lalalangchain
+# lalalangchain — Dynamic Model Selection
 
-My notes and code from working through a [LangChain tutorial](https://www.youtube.com/watch?v=J7j5tCB_y4w), starting from a small weather agent.
+Routing a single agent across **multiple local models** at runtime, based on what the incoming message actually needs, using `@wrap_model_call` middleware.
 
-Each lesson explores a **different** LangChain concept rather than building on top of the previous one. So every lesson lives on its own branch and stands alone — the numbers just suggest an order to follow them in, not a dependency chain. `main` holds this overview plus a runnable copy of the latest lesson's code.
+## What this lesson covers
 
-## Lessons
+- `@wrap_model_call` middleware: wraps the model-invocation step itself, receiving both the `ModelRequest` and a `handler` to (optionally) continue the call
+- Picking a different `ChatOllama` model per request by inspecting the latest message's text (`request.messages[-1].text`)
+- Swapping the model with `request.override(model=...)` — the immutable-update pattern for `ModelRequest` — then delegating to `handler(...)` to actually run it
+- Confirming which model answered via `response["messages"][-1].response_metadata["model_name"]`
 
-| # | Branch | Concept |
-|---|---|---|
-| 01 | [01-basic-weather-agent](../../tree/01-basic-weather-agent) | Custom `@tool`, `create_agent`, a local Ollama LLM, and calling the Open-Meteo API |
-| 02 | [02-context-and-memory](../../tree/02-context-and-memory) | Runtime context (`context_schema`), structured output (`response_format`), and conversation memory (checkpointer) |
-| 03 | [03-multimodal-input](../../tree/03-multimodal-input) | Multimodal input — sending text + an image to a vision-capable model (`gemma3`) |
-| 04 | [04-similarity-search](../../tree/04-similarity-search) | Similarity search — embeddings, a FAISS vector store, and retrieval by meaning (the retrieval step of RAG) |
-| 05 | [05-retriever-tool-agent](../../tree/05-retriever-tool-agent) | Retriever-tool agent — wrapping a vector store as a tool with `create_retriever_tool` and letting an agent decide when to retrieve (closing the RAG loop) |
-| 06 | [06-dynamic-prompt-middleware](../../tree/06-dynamic-prompt-middleware) | Dynamic prompt middleware — reshaping the system prompt at runtime from `context_schema` via `@dynamic_prompt`, and disabling `qwen3` reasoning mode |
+## How it works
 
-Each branch has its own README explaining what that lesson covers.
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as create_agent (default: basic_model)
+    participant MW as dynamic_model_selector (wrap_model_call)
+    participant Basic as llama3.1:8b
+    participant Advanced as qwen3:14b
+    participant Vision as gemma3:12b
 
-## Running a lesson
+    User->>Agent: invoke(messages=[..., "advanced What is 1 + 1?"])
+    Agent->>MW: ModelRequest (model=basic_model)
+    MW->>MW: inspect latest message text for "advanced" / "vision"
+    MW->>Advanced: handler(request.override(model=advanced_model))
+    Advanced-->>MW: ModelResponse
+    MW-->>Agent: ModelResponse
+    Agent-->>User: answer + response_metadata.model_name = "qwen3:14b"
+```
 
-**Requirements:** Python 3.12+, [Ollama](https://ollama.com), [uv](https://docs.astral.sh/uv/)
+1. Three `ChatOllama` instances are created up front: `basic_model` (`llama3.1:8b`), `advanced_model` (`qwen3:14b`), and `vision_model` (`gemma3:12b`).
+2. `create_agent` is given `basic_model` as its default, but also `middleware=[dynamic_model_selector]`.
+3. On every model call, `dynamic_model_selector` looks at the latest message's text and picks a model by keyword (`"advanced"` → `advanced_model`, `"vision"` → `vision_model`, else the default).
+4. It calls `handler(request.override(model=chosen_model))` — `override` returns a new, immutable `ModelRequest` with just the `model` field swapped, and `handler` runs the actual model call with it.
+
+## Why this is interesting
+
+Earlier lessons pick one model for the whole agent. `wrap_model_call` middleware makes the model itself a runtime decision — the same agent can route trivial requests to a small, fast model and reserve a bigger model for requests that ask for it, without spinning up multiple agents. This is also the extension point behind built-ins like `model_fallback` middleware (retry with a different model on error) — same `request.override(model=...)` + `handler(...)` shape, different trigger.
+
+## Requirements
+
+- Python 3.12+
+- [Ollama](https://ollama.com) running locally with `llama3.1:8b`, `qwen3:14b`, and `gemma3:12b` pulled
+- [uv](https://docs.astral.sh/uv/)
+
+## Setup
 
 ```bash
-git checkout 01-basic-weather-agent   # or any lesson branch
-uv sync                               # install that lesson's deps
-ollama pull qwen3:14b                 # check the branch README for the model it uses
+ollama pull llama3.1:8b
+ollama pull qwen3:14b
+ollama pull gemma3:12b
+uv sync
+```
+
+## Run
+
+```bash
 uv run main.py
 ```
 
-The model each lesson uses is noted in its README (lesson 01 uses `llama3.1:8b`, lesson 02 uses `qwen3:14b`, lesson 03 uses `gemma3:12b`, lesson 04 uses the `qwen3-embedding` embedding model, lesson 05 uses `qwen3-embedding` for retrieval and `qwen3:14b` as the agent's chat model, lesson 06 uses `qwen3:14b` with reasoning disabled).
+Sends "advanced What is 1 + 1?" — the `"advanced"` keyword routes the call to `qwen3:14b`, and the script prints the answer plus the model name that actually served it.
+
+## Key files
+
+| File | Purpose |
+|---|---|
+| [main.py](main.py) | Defines the three models, the `wrap_model_call` middleware, and runs the agent |
+| [pyproject.toml](pyproject.toml) | Project dependencies |
+
+## Dependencies
+
+| Package | Role |
+|---|---|
+| `langchain` | `create_agent` and the `middleware` module (`wrap_model_call`, `ModelRequest`, `ModelResponse`) |
+| `langchain-ollama` | `ChatOllama` |
+
+---
+
+> One of several standalone LangChain lessons — see the [`main` branch](../../tree/main) for the full list.
