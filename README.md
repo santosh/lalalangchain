@@ -1,32 +1,82 @@
-# lalalangchain
+# lalalangchain — Agent Lifecycle Hooks
 
-My notes and code from working through a [LangChain tutorial](https://www.youtube.com/watch?v=J7j5tCB_y4w), starting from a small weather agent.
+Instrumenting an agent's execution with a custom `AgentMiddleware` subclass — hooking into the run before/after the agent starts and before/after each model call, without touching the agent's core logic.
 
-Each lesson explores a **different** LangChain concept rather than building on top of the previous one. So every lesson lives on its own branch and stands alone — the numbers just suggest an order to follow them in, not a dependency chain. `main` holds this overview plus a runnable copy of the latest lesson's code.
+## What this lesson covers
 
-## Lessons
+- Subclassing `AgentMiddleware` and overriding its lifecycle hooks: `before_agent`, `before_model`, `after_model`, `after_agent`
+- Keeping state across hooks on the middleware instance itself (`self.start_time`)
+- Attaching middleware to `create_agent` via `middleware=[HooksDemo()]`
+- Timing a full agent run end-to-end without modifying the agent's prompt or tools
 
-| # | Branch | Concept |
-|---|---|---|
-| 01 | [01-basic-weather-agent](../../tree/01-basic-weather-agent) | Custom `@tool`, `create_agent`, a local Ollama LLM, and calling the Open-Meteo API |
-| 02 | [02-context-and-memory](../../tree/02-context-and-memory) | Runtime context (`context_schema`), structured output (`response_format`), and conversation memory (checkpointer) |
-| 03 | [03-multimodal-input](../../tree/03-multimodal-input) | Multimodal input — sending text + an image to a vision-capable model (`gemma3`) |
-| 04 | [04-similarity-search](../../tree/04-similarity-search) | Similarity search — embeddings, a FAISS vector store, and retrieval by meaning (the retrieval step of RAG) |
-| 05 | [05-retriever-tool-agent](../../tree/05-retriever-tool-agent) | Retriever-tool agent — wrapping a vector store as a tool with `create_retriever_tool` and letting an agent decide when to retrieve (closing the RAG loop) |
-| 06 | [06-dynamic-prompt-middleware](../../tree/06-dynamic-prompt-middleware) | Dynamic prompt middleware — reshaping the system prompt at runtime from `context_schema` via `@dynamic_prompt`, and disabling `qwen3` reasoning mode |
-| 07 | [07-dynamic-model-selection](../../tree/07-dynamic-model-selection) | Dynamic model selection — routing a single agent across multiple local models at runtime with `@wrap_model_call` |
+## How it works
 
-Each branch has its own README explaining what that lesson covers.
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as create_agent (qwen3:14b)
+    participant Hooks as HooksDemo (AgentMiddleware)
+    participant Model as qwen3:14b
 
-## Running a lesson
+    User->>Agent: invoke(messages)
+    Agent->>Hooks: before_agent(state, runtime)
+    Hooks-->>Agent: record start_time, print "Starting..."
+    Agent->>Hooks: before_model(state, runtime)
+    Hooks-->>Agent: print "Before model call..."
+    Agent->>Model: run the model
+    Model-->>Agent: response
+    Agent->>Hooks: after_model(state, runtime)
+    Hooks-->>Agent: print "After model call..."
+    Agent->>Hooks: after_agent(state, runtime)
+    Hooks-->>Agent: print elapsed time
+    Agent-->>User: final answer
+```
 
-**Requirements:** Python 3.12+, [Ollama](https://ollama.com), [uv](https://docs.astral.sh/uv/)
+1. `HooksDemo` extends `AgentMiddleware` and overrides four lifecycle hooks, each receiving the current `AgentState` and `runtime`.
+2. `before_agent` fires once, at the very start of `agent.invoke(...)`, and stamps `self.start_time`.
+3. `before_model` / `after_model` fire around every model call — with a single-turn, tool-free agent that's exactly once here, but they'd fire per iteration in a multi-step tool-calling loop.
+4. `after_agent` fires once the whole run is done, and prints the elapsed wall-clock time using the timestamp stashed in `before_agent`.
+5. The answer is read from `response["messages"][-1]` — the **last** message, not the first (which is just the `SystemMessage` echoed back in the state).
+
+## Why this is interesting
+
+Middleware hooks are a clean way to add cross-cutting behavior — logging, timing, metrics, guardrails — around an agent's run without touching its prompt, tools, or business logic. `before_model`/`after_model` are the more interesting pair for agents that loop over multiple tool calls: they'd fire once per model invocation, not once per `agent.invoke()`, making them a natural place to log or short-circuit each step.
+
+## Requirements
+
+- Python 3.12+
+- [Ollama](https://ollama.com) running locally with `qwen3:14b` pulled
+- [uv](https://docs.astral.sh/uv/)
+
+## Setup
 
 ```bash
-git checkout 01-basic-weather-agent   # or any lesson branch
-uv sync                               # install that lesson's deps
-ollama pull qwen3:14b                 # check the branch README for the model it uses
+ollama pull qwen3:14b
+uv sync
+```
+
+## Run
+
+```bash
 uv run main.py
 ```
 
-The model each lesson uses is noted in its README (lesson 01 uses `llama3.1:8b`, lesson 02 uses `qwen3:14b`, lesson 03 uses `gemma3:12b`, lesson 04 uses the `qwen3-embedding` embedding model, lesson 05 uses `qwen3-embedding` for retrieval and `qwen3:14b` as the agent's chat model, lesson 06 uses `qwen3:14b` with reasoning disabled, lesson 07 routes across `llama3.1:8b`, `qwen3:14b`, and `gemma3:12b`).
+Prints each lifecycle hook firing in order, the elapsed time, and the model's answer to "What is the capital of France?".
+
+## Key files
+
+| File | Purpose |
+|---|---|
+| [main.py](main.py) | Defines `HooksDemo` and runs the agent with it attached |
+| [pyproject.toml](pyproject.toml) | Project dependencies |
+
+## Dependencies
+
+| Package | Role |
+|---|---|
+| `langchain` | `create_agent` and the `middleware` module (`AgentMiddleware`, `AgentState`) |
+| `langchain-ollama` | `ChatOllama` |
+
+---
+
+> One of several standalone LangChain lessons — see the [`main` branch](../../tree/main) for the full list.
