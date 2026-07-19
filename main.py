@@ -1,46 +1,49 @@
 from dataclasses import dataclass
+from typing import Callable
 from dotenv import load_dotenv
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRequest, ModelResponse, dynamic_prompt
+from langchain.messages import SystemMessage, HumanMessage
+from langchain.agents.middleware import ModelRequest, ModelResponse, wrap_model_call
 from langchain_ollama import ChatOllama
 
 load_dotenv()
 
-@dataclass
-class Context:
-    user_role: str
+basic_model = ChatOllama(model="llama3.1:8b")
+advanced_model = ChatOllama(model="qwen3:14b")
+vision_model = ChatOllama(model="gemma3:12b")
 
-@dynamic_prompt
-def user_role_prompt(request: ModelRequest) -> str:
-    user_role = request.runtime.context.user_role
+@wrap_model_call
+def dynamic_model_selector(
+    request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]
+) -> ModelResponse:
+    text = request.messages[-1].text.lower()
 
-    base_prompt = "You are a helpful and very concise assistant."
+    if "advanced" in text:
+        model = advanced_model
+    elif "vision" in text:
+        model = vision_model
+    else:
+        model = basic_model
 
-    match user_role:
-        case "expert":
-            return f"{base_prompt} Provide detail technical responses."
-        case "beginner":
-            return f"{base_prompt} Keep your explanations simple and basic."
-        case "child":
-            return f"{base_prompt} Explain everything as if you were literally talking to a five-year old."
-        case _:
-            return base_prompt
+    return handler(request.override(model=model))
 
 def main():
     agent = create_agent(
-        model=ChatOllama(model="qwen3:14b", reasoning=False),
-        context_schema=Context,
-        middleware=[user_role_prompt],
+        model=basic_model,
+        middleware=[dynamic_model_selector],
+        tools=[],
     )
 
     response = agent.invoke({
         "messages": [
-            {"role": "user", "content": "Explain how a car engine works."}]
-    }, context=Context(user_role="child"))
+            SystemMessage("You are a helpful assistant."),
+            HumanMessage("advanced What is 1 + 1?"),
+        ]
+    })
 
-    print(response["messages"][-1].content)
-
+    print(response['messages'][-1].content)
+    print(response['messages'][-1].response_metadata['model_name'])
 
 if __name__ == "__main__":
     main()
