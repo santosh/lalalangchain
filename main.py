@@ -1,22 +1,28 @@
-from base64 import b64encode
-from langchain_ollama import ChatOllama
+from pprint import pprint
+from dotenv import load_dotenv
 
+from langchain_community.vectorstores import FAISS
+from langchain_ollama import OllamaEmbeddings
 
-model = ChatOllama(model='gemma3:12b', temperature=0.3)
+load_dotenv()
 
-local_image = '/home/santosh/Pictures/downloaded_dslr_archive/patna_misc/IMG_6255.jpg'
-image_b64 = b64encode(open(local_image, 'rb').read()).decode()
-message = {
-    'role': 'user',
-    'content': [
-        {'type': 'text', 'text': 'Describe the contents of the image in detail.'},
-        {'type': 'image', 'base64': image_b64, 'mime_type': 'image/jpeg'}
-    ]
-}
+embeddings = OllamaEmbeddings(model="qwen3-embedding")
+
+texts = [
+    'Apple makes very good computers.',
+    'I believe Apple is innovative!',
+    'I love apples.',
+    'I am a fan of MacBooks.',
+    'I enjoy oranges.',
+    'I like Lenovo ThinkPads.',
+    'I think pears taste very good.'
+]
+
+vector_store = FAISS.from_texts(texts, embeddings)
 
 def main():
-    response = model.invoke([message])
-    print(response.content)
+    pprint(vector_store.similarity_search('Apples are my favorite food.', k=7))
+    pprint(vector_store.similarity_search('Linux is a great operating system.', k=7))
 
 if __name__ == "__main__":
     main()
