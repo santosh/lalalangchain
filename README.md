@@ -1,30 +1,75 @@
-# lalalangchain
+# lalalangchain — Dynamic Prompt Middleware
 
-My notes and code from working through a [LangChain tutorial](https://www.youtube.com/watch?v=J7j5tCB_y4w), starting from a small weather agent.
+Reshaping an agent's system prompt at runtime based on **who's asking**, using `context_schema` and a `@dynamic_prompt` middleware — plus a look at disabling `qwen3`'s reasoning mode for simple, latency-sensitive queries.
 
-Each lesson explores a **different** LangChain concept rather than building on top of the previous one. So every lesson lives on its own branch and stands alone — the numbers just suggest an order to follow them in, not a dependency chain. `main` holds this overview plus a runnable copy of the latest lesson's code.
+## What this lesson covers
 
-## Lessons
+- Passing per-invocation data with a `context_schema` (here, a `user_role`)
+- `@dynamic_prompt` middleware: a function that builds the system prompt from `request.runtime.context` on every call
+- Branching prompt behavior with `match` on the context field (`"expert"`, `"beginner"`, `"child"`)
+- Disabling `qwen3:14b`'s thinking mode with `ChatOllama(reasoning=False)` — and why that's a large latency/token win for a question that doesn't need deliberation
+- Reading the agent's answer directly (`response["messages"][-1].content`) instead of dumping the whole state
 
-| # | Branch | Concept |
-|---|---|---|
-| 01 | [01-basic-weather-agent](../../tree/01-basic-weather-agent) | Custom `@tool`, `create_agent`, a local Ollama LLM, and calling the Open-Meteo API |
-| 02 | [02-context-and-memory](../../tree/02-context-and-memory) | Runtime context (`context_schema`), structured output (`response_format`), and conversation memory (checkpointer) |
-| 03 | [03-multimodal-input](../../tree/03-multimodal-input) | Multimodal input — sending text + an image to a vision-capable model (`gemma3`) |
-| 04 | [04-similarity-search](../../tree/04-similarity-search) | Similarity search — embeddings, a FAISS vector store, and retrieval by meaning (the retrieval step of RAG) |
-| 05 | [05-retriever-tool-agent](../../tree/05-retriever-tool-agent) | Retriever-tool agent — wrapping a vector store as a tool with `create_retriever_tool` and letting an agent decide when to retrieve (closing the RAG loop) |
+## How it works
 
-Each branch has its own README explaining what that lesson covers.
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as create_agent (qwen3:14b, reasoning=False)
+    participant Middleware as user_role_prompt (dynamic_prompt)
 
-## Running a lesson
+    User->>Agent: invoke(messages, context=Context(user_role="child"))
+    Agent->>Middleware: build system prompt from context
+    Middleware-->>Agent: "...Explain everything as if talking to a five-year old."
+    Agent-->>User: response tailored to that role
+```
 
-**Requirements:** Python 3.12+, [Ollama](https://ollama.com), [uv](https://docs.astral.sh/uv/)
+1. `Context` is a small dataclass holding `user_role`.
+2. `user_role_prompt`, decorated with `@dynamic_prompt`, reads `request.runtime.context.user_role` and returns a different system prompt per role via `match`.
+3. `create_agent` is wired with `context_schema=Context` and `middleware=[user_role_prompt]`, so the prompt is rebuilt on every invocation rather than fixed at agent-creation time.
+4. `ChatOllama(model="qwen3:14b", reasoning=False)` turns off the model's thinking phase — the same question runs in a fraction of the time and output tokens with no visible quality loss for something this simple.
+
+## Why this is interesting
+
+Earlier lessons pass a `system_prompt` string that's fixed once, at agent construction. `@dynamic_prompt` middleware makes the prompt a function of **runtime context**, so the same agent instance can speak differently to an expert, a beginner, or a child without rebuilding it per request.
+
+Separately: `qwen3:14b` thinks by default (visible via `ollama run`, and via extra latency even when `langchain-ollama` hides the `<think>` tags from `content`). Benchmarking the same prompt with `reasoning=None` vs. `reasoning=False` showed roughly a **6x** drop in response time and output tokens for this question — most of the default run's tokens were invisible reasoning, not the answer. Reasoning is worth keeping for genuinely hard problems, but it's dead weight for something like "explain how a car engine works."
+
+## Requirements
+
+- Python 3.12+
+- [Ollama](https://ollama.com) running locally with `qwen3:14b` pulled
+- [uv](https://docs.astral.sh/uv/)
+
+## Setup
 
 ```bash
-git checkout 01-basic-weather-agent   # or any lesson branch
-uv sync                               # install that lesson's deps
-ollama pull qwen3:14b                 # check the branch README for the model it uses
+ollama pull qwen3:14b
+uv sync
+```
+
+## Run
+
+```bash
 uv run main.py
 ```
 
-The model each lesson uses is noted in its README (lesson 01 uses `llama3.1:8b`, lesson 02 uses `qwen3:14b`, lesson 03 uses `gemma3:12b`, lesson 04 uses the `qwen3-embedding` embedding model, lesson 05 uses `qwen3-embedding` for retrieval and `qwen3:14b` as the agent's chat model).
+Prints the agent's answer to "Explain how a car engine works.", phrased for the `user_role` set in `main()`.
+
+## Key files
+
+| File | Purpose |
+|---|---|
+| [main.py](main.py) | Defines `Context`, the `dynamic_prompt` middleware, and runs the agent |
+| [pyproject.toml](pyproject.toml) | Project dependencies |
+
+## Dependencies
+
+| Package | Role |
+|---|---|
+| `langchain` | `create_agent` and the `middleware` module (`dynamic_prompt`, `ModelRequest`) |
+| `langchain-ollama` | `ChatOllama`, including the `reasoning` toggle |
+
+---
+
+> One of several standalone LangChain lessons — see the [`main` branch](../../tree/main) for the full list.
