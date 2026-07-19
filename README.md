@@ -13,6 +13,7 @@ Each lesson explores a **different** LangChain concept rather than building on t
 | 03 | [03-multimodal-input](../../tree/03-multimodal-input) | Multimodal input — sending text + an image to a vision-capable model (`gemma3`) |
 | 04 | [04-similarity-search](../../tree/04-similarity-search) | Similarity search — embeddings, a FAISS vector store, and retrieval by meaning (the retrieval step of RAG) |
 | 05 | [05-retriever-tool-agent](../../tree/05-retriever-tool-agent) | Retriever-tool agent — wrapping a vector store as a tool with `create_retriever_tool` and letting an agent decide when to retrieve (closing the RAG loop) |
+| 06 | [06-dynamic-prompt-middleware](../../tree/06-dynamic-prompt-middleware) | Dynamic prompt middleware — reshaping the system prompt at runtime from `context_schema` via `@dynamic_prompt`, and disabling `qwen3` reasoning mode |
 
 Each branch has its own README explaining what that lesson covers.
 
@@ -27,4 +28,4 @@ ollama pull qwen3:14b                 # check the branch README for the model it
 uv run main.py
 ```
 
-The model each lesson uses is noted in its README (lesson 01 uses `llama3.1:8b`, lesson 02 uses `qwen3:14b`, lesson 03 uses `gemma3:12b`, lesson 04 uses the `qwen3-embedding` embedding model, lesson 05 uses `qwen3-embedding` for retrieval and `qwen3:14b` as the agent's chat model).
+The model each lesson uses is noted in its README (lesson 01 uses `llama3.1:8b`, lesson 02 uses `qwen3:14b`, lesson 03 uses `gemma3:12b`, lesson 04 uses the `qwen3-embedding` embedding model, lesson 05 uses `qwen3-embedding` for retrieval and `qwen3:14b` as the agent's chat model, lesson 06 uses `qwen3:14b` with reasoning disabled).
