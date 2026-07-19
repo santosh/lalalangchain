@@ -1,29 +1,84 @@
-# lalalangchain
+# lalalangchain — Retriever-Tool Agent
 
-My notes and code from working through a [LangChain tutorial](https://www.youtube.com/watch?v=J7j5tCB_y4w), starting from a small weather agent.
+Closing the RAG loop: wrap the FAISS vector store from the similarity-search lesson in a **tool**, hand it to an agent, and let the agent decide when to retrieve before answering.
 
-Each lesson explores a **different** LangChain concept rather than building on top of the previous one. So every lesson lives on its own branch and stands alone — the numbers just suggest an order to follow them in, not a dependency chain. `main` holds this overview plus a runnable copy of the latest lesson's code.
+## What this lesson covers
 
-## Lessons
+- Turning a retriever into a tool with `create_retriever_tool`, so an LLM can call it like any other tool
+- `create_agent` (LangChain 1.0) driven by a **chat** model (`ChatOllama`) rather than a plain embeddings model
+- Using `system_prompt` to push the agent toward calling the tool instead of guessing from parametric knowledge
+- Reading an agent's reply out of the returned message list: `result["messages"][-1].content`
 
-| # | Branch | Concept |
-|---|---|---|
-| 01 | [01-basic-weather-agent](../../tree/01-basic-weather-agent) | Custom `@tool`, `create_agent`, a local Ollama LLM, and calling the Open-Meteo API |
-| 02 | [02-context-and-memory](../../tree/02-context-and-memory) | Runtime context (`context_schema`), structured output (`response_format`), and conversation memory (checkpointer) |
-| 03 | [03-multimodal-input](../../tree/03-multimodal-input) | Multimodal input — sending text + an image to a vision-capable model (`gemma3`) |
-| 04 | [04-similarity-search](../../tree/04-similarity-search) | Similarity search — embeddings, a FAISS vector store, and retrieval by meaning (the retrieval step of RAG) |
+## How it works
 
-Each branch has its own README explaining what that lesson covers.
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as create_agent (ChatOllama qwen3:14b)
+    participant Tool as FruitRetriever tool
+    participant Store as FAISS vector store
 
-## Running a lesson
+    User->>Agent: "What fruit does person likes?"
+    Agent->>Tool: call FruitRetriever(query)
+    Tool->>Store: similarity_search(query, k=3)
+    Store-->>Tool: nearest 3 texts
+    Tool-->>Agent: retrieved texts
+    Agent-->>User: answer grounded in retrieved texts
+```
 
-**Requirements:** Python 3.12+, [Ollama](https://ollama.com), [uv](https://docs.astral.sh/uv/)
+1. The FAISS store from the similarity-search lesson is wrapped with `.as_retriever(search_kwargs={"k": 3})`.
+2. `create_retriever_tool` turns that retriever into a `FruitRetriever` tool the agent can call.
+3. `create_agent` wires the tool to `ChatOllama(model="qwen3:14b")`, with a `system_prompt` instructing the agent to always call `FruitRetriever` before answering.
+4. The agent decides to call the tool, gets back the nearest stored statements, and answers using only that context.
+
+## Why this is interesting
+
+Lesson 04 showed the *retrieval* half of RAG in isolation — a bare `similarity_search` call. This lesson shows the *generation* half hooked up to it: the LLM itself decides when retrieval is useful, calls it as a tool, and grounds its answer in what comes back, instead of answering from memory alone.
+
+Without the `system_prompt` nudge, `qwen3:14b` sometimes answers directly (and vaguely) instead of calling the tool — a reminder that tool availability alone doesn't guarantee tool use; the model still has to be steered toward it.
+
+## Requirements
+
+- Python 3.12+
+- [Ollama](https://ollama.com) running locally with `qwen3-embedding` and `qwen3:14b` pulled
+- [uv](https://docs.astral.sh/uv/)
+
+## Setup
 
 ```bash
-git checkout 01-basic-weather-agent   # or any lesson branch
-uv sync                               # install that lesson's deps
-ollama pull qwen3:14b                 # check the branch README for the model it uses
+# Pull the models (one-time)
+ollama pull qwen3-embedding
+ollama pull qwen3:14b
+
+# Install Python dependencies
+uv sync
+```
+
+## Run
+
+```bash
 uv run main.py
 ```
 
-The model each lesson uses is noted in its README (lesson 01 uses `llama3.1:8b`, lesson 02 uses `qwen3:14b`, lesson 03 uses `gemma3:12b`, lesson 04 uses the `qwen3-embedding` embedding model).
+The script builds the FAISS store, wraps it as a tool, and asks the agent "What fruit does person likes?" — the agent calls `FruitRetriever` and prints its grounded answer.
+
+## Key files
+
+| File | Purpose |
+|---|---|
+| [main.py](main.py) | Builds the FAISS store, wraps it as a tool, and runs the agent |
+| [pyproject.toml](pyproject.toml) | Project dependencies |
+
+## Dependencies
+
+| Package | Role |
+|---|---|
+| `langchain` | `create_agent` |
+| `langchain-core` | `create_retriever_tool` |
+| `langchain-ollama` | `ChatOllama` and `OllamaEmbeddings` |
+| `langchain-community` | FAISS vector store integration |
+| `faiss-cpu` | The underlying similarity-search index |
+
+---
+
+> One of several standalone LangChain lessons — see the [`main` branch](../../tree/main) for the full list.
